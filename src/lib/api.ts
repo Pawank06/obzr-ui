@@ -15,6 +15,15 @@ import {
   ModelsResponse,
   StructuredGenerationRequest,
   HealthCheckResponse,
+  MemoryV2StoreRequest,
+  MemoryV2QueryRequest,
+  MemoryQueryResponse,
+  MemoryStats,
+  PromotionResult,
+  ConsolidationResult,
+  MemoryHealthStatus,
+  AuditLogResponse,
+  PaginatedResponse,
 } from './types';
 import { requestCache } from './request-cache';
 
@@ -272,6 +281,158 @@ class ApiClient {
     if (!response.data.success) {
       throw new Error(response.data.error || 'Failed to delete memory');
     }
+  }
+
+  // Memory V2 - New Memory System
+  async storeMemoryV2(data: MemoryV2StoreRequest): Promise<{ stmId?: string; ltmId?: string; importance: number }> {
+    const response: AxiosResponse<ApiResponse<{ stmId?: string; ltmId?: string; importance: number }>> = 
+      await this.client.post('/api/memory/store', data);
+    if (response.data.success && response.data.data) {
+      return response.data.data;
+    }
+    throw new Error(response.data.error || 'Failed to store memory');
+  }
+
+  async queryMemoriesV2(data: MemoryV2QueryRequest): Promise<MemoryQueryResponse> {
+    const response: AxiosResponse<ApiResponse<MemoryQueryResponse>> = 
+      await this.client.post('/api/memory/query', data);
+    if (response.data.success && response.data.data) {
+      return response.data.data;
+    }
+    throw new Error(response.data.error || 'Failed to query memories');
+  }
+
+  async batchStoreMemories(memories: MemoryV2StoreRequest[]): Promise<{ results: Array<{ stmId?: string; ltmId?: string; importance: number }> }> {
+    const response: AxiosResponse<ApiResponse<{ results: Array<{ stmId?: string; ltmId?: string; importance: number }> }>> = 
+      await this.client.post('/api/memory/batch-store', { memories });
+    if (response.data.success && response.data.data) {
+      return response.data.data;
+    }
+    throw new Error(response.data.error || 'Failed to batch store memories');
+  }
+
+  async getMemoryStats(): Promise<MemoryStats> {
+    const response: AxiosResponse<ApiResponse<MemoryStats>> = 
+      await this.client.get('/api/memory/stats');
+    if (response.data.success && response.data.data) {
+      return response.data.data;
+    }
+    throw new Error(response.data.error || 'Failed to get memory stats');
+  }
+
+  async getCacheStats(): Promise<{ cache: { hitRate: number; totalEntries: number; avgResponseTime: number }; telemetry: { totalQueries: number; avgRelevanceScore: number; errorRate: number } }> {
+    const response: AxiosResponse<ApiResponse<{ cache: { hitRate: number; totalEntries: number; avgResponseTime: number }; telemetry: { totalQueries: number; avgRelevanceScore: number; errorRate: number } }>> = 
+      await this.client.get('/api/memory/cache-stats');
+    if (response.data.success && response.data.data) {
+      return response.data.data;
+    }
+    throw new Error(response.data.error || 'Failed to get cache stats');
+  }
+
+  async promoteMemories(options?: { maxPromotions?: number; minImportance?: number }): Promise<PromotionResult> {
+    const response: AxiosResponse<ApiResponse<PromotionResult>> = 
+      await this.client.post('/api/memory/promote', options || {});
+    if (response.data.success && response.data.data) {
+      return response.data.data;
+    }
+    throw new Error(response.data.error || 'Failed to promote memories');
+  }
+
+  async consolidateMemories(options?: { maxAge?: number; similarityThreshold?: number }): Promise<ConsolidationResult> {
+    const response: AxiosResponse<ApiResponse<ConsolidationResult>> = 
+      await this.client.post('/api/memory/consolidate', options || {});
+    if (response.data.success && response.data.data) {
+      return response.data.data;
+    }
+    throw new Error(response.data.error || 'Failed to consolidate memories');
+  }
+
+  async clearMemories(type?: 'stm' | 'ltm' | 'cache'): Promise<{ cleared: number }> {
+    const response: AxiosResponse<ApiResponse<{ cleared: number }>> = 
+      await this.client.delete('/api/memory/clear', { data: { type } });
+    if (response.data.success && response.data.data) {
+      return response.data.data;
+    }
+    throw new Error(response.data.error || 'Failed to clear memories');
+  }
+
+  async getMemoryHealth(): Promise<MemoryHealthStatus> {
+    const response: AxiosResponse<ApiResponse<MemoryHealthStatus>> = 
+      await this.client.get('/api/memory/health');
+    if (response.data.success && response.data.data) {
+      return response.data.data;
+    }
+    throw new Error(response.data.error || 'Failed to get memory health');
+  }
+
+  async warmUpCache(): Promise<{ warmedUp: number }> {
+    const response: AxiosResponse<ApiResponse<{ warmedUp: number }>> = 
+      await this.client.post('/api/memory/cache/warm-up');
+    if (response.data.success && response.data.data) {
+      return response.data.data;
+    }
+    throw new Error(response.data.error || 'Failed to warm up cache');
+  }
+
+  async runMemoryMaintenance(): Promise<{ tasksCompleted: number }> {
+    const response: AxiosResponse<ApiResponse<{ tasksCompleted: number }>> = 
+      await this.client.post('/api/memory/maintenance');
+    if (response.data.success && response.data.data) {
+      return response.data.data;
+    }
+    throw new Error(response.data.error || 'Failed to run maintenance');
+  }
+
+  async updateMemoryConfig(config: Record<string, unknown>): Promise<{ updated: boolean }> {
+    const response: AxiosResponse<ApiResponse<{ updated: boolean }>> = 
+      await this.client.put('/api/memory/config', config);
+    if (response.data.success && response.data.data) {
+      return response.data.data;
+    }
+    throw new Error(response.data.error || 'Failed to update config');
+  }
+
+  // Security & Audit
+  async getAuditLogs(options?: {
+    page?: number;
+    limit?: number;
+    action?: string;
+    resource?: string;
+    startDate?: string;
+    endDate?: string;
+  }): Promise<PaginatedResponse<AuditLogResponse['logs'][0]>> {
+    const params = new URLSearchParams();
+    if (options?.page) params.append('page', options.page.toString());
+    if (options?.limit) params.append('limit', options.limit.toString());
+    if (options?.action) params.append('action', options.action);
+    if (options?.resource) params.append('resource', options.resource);
+    if (options?.startDate) params.append('startDate', options.startDate);
+    if (options?.endDate) params.append('endDate', options.endDate);
+
+    const response: AxiosResponse<PaginatedResponse<AuditLogResponse['logs'][0]>> = 
+      await this.client.get(`/api/security/audit-logs?${params.toString()}`);
+    if (response.data.success) {
+      return response.data;
+    }
+    throw new Error(response.data.error || 'Failed to get audit logs');
+  }
+
+  async encryptData(data: string): Promise<{ encrypted: string; checksum: string }> {
+    const response: AxiosResponse<ApiResponse<{ encrypted: string; checksum: string }>> = 
+      await this.client.post('/api/security/encrypt', { data });
+    if (response.data.success && response.data.data) {
+      return response.data.data;
+    }
+    throw new Error(response.data.error || 'Failed to encrypt data');
+  }
+
+  async decryptData(encrypted: string): Promise<{ decrypted: string }> {
+    const response: AxiosResponse<ApiResponse<{ decrypted: string }>> = 
+      await this.client.post('/api/security/decrypt', { encrypted });
+    if (response.data.success && response.data.data) {
+      return response.data.data;
+    }
+    throw new Error(response.data.error || 'Failed to decrypt data');
   }
 }
 
